@@ -1,6 +1,8 @@
 /**
  * LensScape - Image Search App JavaScript Module
- * Handles UI interaction, search queries, chip selection, and empty state updates.
+ * Part 2: Fetch & Render
+ * Catches the search, fetches real results from the Wikimedia Commons API,
+ * and renders one card per result into the results grid.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,77 +17,113 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyState = document.getElementById('empty-state');
     const categoryChips = document.querySelectorAll('.chip');
 
-    // Mock dataset for local query demonstration
-    const MOCK_GALLERY = [
-        { id: 1, title: 'Mountain Misty Sunrise', category: 'Nature', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80' },
-        { id: 2, title: 'Futuristic Neon Tower', category: 'Cyberpunk', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=80' },
-        { id: 3, title: 'Modern Glass Facade', category: 'Architecture', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80' },
-        { id: 4, title: 'Majestic Snow Leopard', category: 'Wildlife', url: 'https://images.unsplash.com/photo-1561731216-c3a4d99437d5?auto=format&fit=crop&w=600&q=80' },
-        { id: 5, title: 'Coastal Wave Drone View', category: 'Drone Visuals', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80' },
-        { id: 6, title: 'Abstract Geometry Lines', category: 'Minimalism', url: 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=600&q=80' }
-    ];
-
     // -------------------------------------------------------------------
-    // 2. Event Handlers & Core Functions
+    // 2. Core Functions: catch -> fetch -> render
     // -------------------------------------------------------------------
 
     /**
-     * Executes image search based on user input or tag selection
-     * @param {string} query 
+     * Entry point for every search (typed query OR a category chip click).
+     * Ignores empty input; otherwise fetches and renders real results.
+     * @param {string} rawQuery
      */
-    function executeSearch(query) {
-        const cleanQuery = query.trim().toLowerCase();
+    async function executeSearch(rawQuery) {
+        const query = rawQuery.trim();
 
-        if (!cleanQuery) {
+        if (!query) {                  // Ignore empty searches — no API call
             resetToEmptyState();
             return;
         }
 
-        // Filter mock items
-        const matches = MOCK_GALLERY.filter(item => 
-            item.title.toLowerCase().includes(cleanQuery) || 
-            item.category.toLowerCase().includes(cleanQuery)
-        );
-
-        renderResults(matches, cleanQuery);
+        const items = await fetchImages(query);
+        renderResults(items, query);
     }
 
     /**
-     * Render photo grid cards into results container
+     * Requests matching images from the Wikimedia Commons API.
+     * @param {string} query
+     * @returns {Promise<Array>} list of Commons "page" objects
+     */
+    async function fetchImages(query) {
+        const url =
+            'https://commons.wikimedia.org/w/api.php?action=query&generator=search' +
+            '&gsrsearch=' + encodeURIComponent(query) +
+            '&gsrnamespace=6&gsrlimit=12&prop=imageinfo&iiprop=url&iiurlwidth=400' +
+            '&format=json&origin=*';
+
+        const response = await fetch(url);                  // 1. ask the API
+        if (!response.ok) {                                  // 2. did it work?
+            throw new Error(`Wikimedia request failed: ${response.status}`);
+        }
+        const data = await response.json();                  // 3. read the JSON
+
+        if (!data.query || !data.query.pages) return [];     // no matches at all
+        return Object.values(data.query.pages);
+    }
+
+    /**
+     * Render one card per result into the results grid.
+     * Enhancement: each card is a link that opens the full-resolution
+     * original image in a new tab.
+     * @param {Array} items
+     * @param {string} query
      */
     function renderResults(items, query) {
-        // Clear previous grid items
-        resultsContainer.innerHTML = '';
+        resultsContainer.innerHTML = '';    // clear previous grid items
 
         if (items.length === 0) {
             resultsCount.textContent = `No results found for "${query}"`;
             resultsContainer.appendChild(emptyState);
             emptyState.querySelector('h3').textContent = 'No Matches Found';
-            emptyState.querySelector('p').textContent = 'Try adjusting your keywords or clearing filters.';
+            emptyState.querySelector('p').textContent = 'Try adjusting your keywords or pick another category.';
             return;
         }
 
         resultsCount.textContent = `Showing ${items.length} result${items.length > 1 ? 's' : ''} for "${query}"`;
 
-        items.forEach(item => {
-            const card = document.createElement('div');
+        items.forEach((item) => {
+            const info = item.imageinfo && item.imageinfo[0];
+            if (!info) return;   // skip any page the API returned with no image data
+
+            const cleanTitle = item.title
+                .replace(/^File:/, '')
+                .replace(/\.[a-zA-Z0-9]+$/, '');
+
+            // The card itself is an <a> tag, so the whole card opens the
+            // full-resolution original in a new tab.
+            const card = document.createElement('a');
             card.className = 'image-card';
-            card.style.cssText = `
-                background: #1e293b;
-                border-radius: 12px;
-                overflow: hidden;
-                border: 1px solid rgba(255,255,255,0.08);
-                transition: transform 0.2s ease;
-            `;
-            card.innerHTML = `
-                <div style="height: 180px; overflow: hidden; background: #0f172a;">
-                    <img src="${item.url}" alt="${item.title}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://placehold.co/600x400/1e293b/f59e0b?text=LensScape+Visual'">
-                </div>
-                <div style="padding: 1rem;">
-                    <span style="font-size: 0.7rem; color: #06b6d4; text-transform: uppercase; font-weight: 600;">${item.category}</span>
-                    <h4 style="font-size: 0.95rem; font-weight: 600; color: #f8fafc; margin-top: 0.25rem;">${item.title}</h4>
-                </div>
-            `;
+            card.href = info.url;
+            card.target = '_blank';
+            card.rel = 'noopener noreferrer';
+
+            const thumbWrap = document.createElement('div');
+            thumbWrap.className = 'card-thumb';
+
+            const img = document.createElement('img');
+            img.src = info.thumburl || info.url;
+            img.alt = cleanTitle;
+            img.loading = 'lazy';
+            img.onerror = function () {
+                this.src = 'https://placehold.co/600x400/1e293b/f59e0b?text=LensScape+Visual';
+            };
+            thumbWrap.appendChild(img);
+
+            const body = document.createElement('div');
+            body.className = 'card-body';
+
+            const badge = document.createElement('span');
+            badge.className = 'card-badge';
+            badge.textContent = 'Commons';
+
+            const title = document.createElement('h4');
+            title.className = 'card-title';
+            title.textContent = cleanTitle;
+
+            body.appendChild(badge);
+            body.appendChild(title);
+
+            card.appendChild(thumbWrap);
+            card.appendChild(body);
             resultsContainer.appendChild(card);
         });
     }
@@ -103,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------
-    // 3. Setup DOM Event Listeners
+    // 3. DOM Event Listeners
     // -------------------------------------------------------------------
 
     // Search Input Typing Listener (Toggle Clear Button)
@@ -123,14 +161,14 @@ document.addEventListener('DOMContentLoaded', () => {
         resetToEmptyState();
     });
 
-    // Form Submit Event Handler
-    searchForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        executeSearch(searchInput.value);
+    // Form Submit Event Handler — catch the search
+    searchForm.addEventListener('submit', (event) => {
+        event.preventDefault();             // stop the page from reloading
+        executeSearch(searchInput.value);   // read query, fetch, render
     });
 
     // Category Chips Quick Selection
-    categoryChips.forEach(chip => {
+    categoryChips.forEach((chip) => {
         chip.addEventListener('click', () => {
             const tagValue = chip.getAttribute('data-tag');
             searchInput.value = tagValue;
@@ -139,5 +177,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    console.log('LensScape initial JS scaffold bound successfully.');
+    console.log('LensScape wired to the Wikimedia Commons API.');
 });

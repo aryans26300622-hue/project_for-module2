@@ -7,5 +7,8 @@ The application features a warm slate (`#0f172a`), vibrant amber (`#f59e0b`), an
 
 ## File Breakdown
 - **index.html**: Structural layout containing accessible forms, sticky navigation bar, and responsive search result container.
-- **styles.css**: Complete aesthetic ruleset including dark theme variables, custom scrollbars, and grid rules.
-- **script.js**: Event handlers for form submission prevention, input clearing, chip selection, and mock dataset filtering.
+- **styles.css**: Complete aesthetic ruleset including dark theme variables, custom scrollbars, grid rules, and result-card styling.
+- **script.js**: Event handlers for form submission (catch), a live fetch to the Wikimedia Commons API (fetch), and DOM rendering of one card per result (render). Empty searches are ignored, and each card links to the full-resolution original image in a new tab.
+
+## Data Source
+Search results come from the free, key-free [Wikimedia Commons API](https://commons.wikimedia.org/w/api.php), queried live in the browser — no backend or API key required.
