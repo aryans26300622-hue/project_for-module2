@@ -1,2 +1,2 @@
 // Reviewed and sanitized
-card.innerHTML = `
+resultsContainer.innerHTML = '';
